@@ -1,6 +1,6 @@
 import json
 from django.shortcuts import render
-from .utils import ejecutar_biseccion
+from .utils import calcular_raiz
 
 PRESETS = [
     {'label': 'Polinómica: x³ - x - 2', 'func': 'x**3 - x - 2', 'a': 1, 'b': 2},
@@ -9,16 +9,29 @@ PRESETS = [
     {'label': 'Logarítmica: ln(x) - x + 2', 'func': 'log(x) - x + 2', 'a': 1, 'b': 4},
 ]
 
+METODOS = [
+    {'val': 'biseccion', 'label': 'Método de Bisección'},
+    {'val': 'regula_falsi', 'label': 'Regula Falsi (Falsa Posición)'},
+    {'val': 'newton', 'label': 'Newton-Raphson'},
+    {'val': 'secante', 'label': 'Método de la Secante'},
+]
+
 def index(request):
-    context = {'presets': PRESETS}
+    context = {
+        'presets': PRESETS,
+        'metodos': METODOS,
+        'metodo_sel': 'biseccion'
+    }
+    
     if request.method == 'POST':
         try:
             func = request.POST.get('funcion', '').strip()
             a = float(request.POST.get('a'))
             b = float(request.POST.get('b'))
             tol = float(request.POST.get('tolerancia', 0.0001))
+            metodo = request.POST.get('metodo', 'biseccion')
 
-            historial, grafica_data, mensaje = ejecutar_biseccion(func, a, b, tol)
+            historial, grafica_data, mensaje, comparativa = calcular_raiz(func, a, b, metodo, tol)
 
             context.update({
                 'historial': historial,
@@ -28,10 +41,12 @@ def index(request):
                 'funcion': func,
                 'a': a,
                 'b': b,
-                'tolerancia': tol
+                'tolerancia': tol,
+                'metodo_sel': metodo,
+                'comparativa': comparativa
             })
         except ValueError:
-            context['mensaje'] = "Por favor ingresa valores numéricos válidos para los límites y la tolerancia."
+            context['mensaje'] = "Por favor ingresa valores numéricos válidos."
         except Exception as e:
             context['mensaje'] = f"Error inesperado: {str(e)}"
 
