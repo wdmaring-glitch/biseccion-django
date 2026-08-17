@@ -16,9 +16,10 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path
-from calculadora.views import index
+from calculadora.views import index, sugerir_intervalos_view
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('', index, name='index'),
+    path('sugerir-intervalos/', sugerir_intervalos_view, name='sugerir_intervalos'),
 ]

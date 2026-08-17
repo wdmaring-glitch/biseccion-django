@@ -1,11 +1,12 @@
 import sympy as sp
 import numpy as np
+from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
 
 def preparar_funcion(func_str):
-    """Convierte la cadena ingresada en función ejecutable de Python y expresión de SymPy."""
+    """Convierte la cadena ingresada en función ejecutable, permitiendo multiplicación implícita (ej: 2x -> 2*x)."""
     x = sp.Symbol('x')
-    func_prep = func_str.replace('^', '**')
-    expr = sp.sympify(func_prep)
+    transformations = standard_transformations + (implicit_multiplication_application, convert_xor)
+    expr = parse_expr(func_str, transformations=transformations)
     f = sp.lambdify(x, expr, modules=['numpy', 'math'])
     return x, expr, f
 
@@ -139,6 +140,26 @@ def metodo_secante(f, x0, x1, tol=0.0001, max_iter=50):
 
     return historial, None
 
+# BUSCADOR AUTOMÁTICO DE INTERVALOS
+def buscar_intervalos_sugeridos(func_str, rango_min=-10, rango_max=10, paso=0.5):
+    """Escanea f(x) en un rango e identifica pares [a, b] donde f(a) * f(b) < 0."""
+    try:
+        _, _, f = preparar_funcion(func_str)
+    except Exception:
+        return []
+
+    x_vals = np.arange(rango_min, rango_max + paso, paso)
+    intervalos = []
+
+    for i in range(len(x_vals) - 1):
+        a, b = x_vals[i], x_vals[i + 1]
+        fa, fb = evaluar_safe(f, a), evaluar_safe(f, b)
+        if fa is not None and fb is not None and fa * fb < 0:
+            intervalos.append({'a': round(float(a), 2), 'b': round(float(b), 2)})
+            if len(intervalos) >= 4:
+                break
+    return intervalos
+
 # CALCULADOR PRINCIPAL Y GENERADOR DE GRÁFICAS
 def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.0001):
     try:
@@ -161,7 +182,6 @@ def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.0001):
     if error or not historial:
         return None, None, error or "Error durante el cálculo.", None
 
-    # Datos para la gráfica interactiva de f(x)
     margin = max(abs(b - a) * 0.5, 1.0)
     x_vals = np.linspace(a - margin, b + margin, 300)
     y_vals = [evaluar_safe(f, xv) for xv in x_vals]
@@ -176,7 +196,6 @@ def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.0001):
         'errors_y': [h['error_abs'] for h in historial]
     }
 
-    # Comparación simultánea de todos los métodos
     comparativa = []
     m_list = [
         ('Bisección', metodo_biseccion(f, a, b, tol)[0]),
