@@ -29,8 +29,8 @@ def evaluar_safe(f, val):
     except Exception:
         return None
 
-# 1. BISECCIÓN
-def metodo_biseccion(f, a, b, tol=0.0001, max_iter=50):
+# 1. BISECCIÓN (Corregido: parada únicamente por ancho de intervalo)
+def metodo_biseccion(f, a, b, tol=0.001, max_iter=50):
     fa, fb = evaluar_safe(f, a), evaluar_safe(f, b)
     if fa is None or fb is None or fa * fb >= 0:
         return None, "No se cumple el Teorema de Bolzano en [a, b] (f(a)*f(b) >= 0)."
@@ -54,7 +54,8 @@ def metodo_biseccion(f, a, b, tol=0.0001, max_iter=50):
             'fc': round(fc, 6), 'error_abs': round(error_abs, 6), 'error_rel': round(error_rel, 4)
         })
 
-        if abs(fc) < tol or error_abs < tol:
+        # Criterio de parada: solo por semiancho de intervalo o raíz exacta
+        if error_abs < tol or fc == 0:
             break
 
         if fa_c * fc < 0:
@@ -66,7 +67,7 @@ def metodo_biseccion(f, a, b, tol=0.0001, max_iter=50):
     return historial, None
 
 # 2. REGULA FALSI
-def metodo_regula_falsi(f, a, b, tol=0.0001, max_iter=50):
+def metodo_regula_falsi(f, a, b, tol=0.001, max_iter=50):
     fa, fb = evaluar_safe(f, a), evaluar_safe(f, b)
     if fa is None or fb is None or fa * fb >= 0:
         return None, "No se cumple el Teorema de Bolzano en [a, b]."
@@ -105,7 +106,7 @@ def metodo_regula_falsi(f, a, b, tol=0.0001, max_iter=50):
     return historial, None
 
 # 3. NEWTON-RAPHSON
-def metodo_newton(x_sym, expr, f, x0, tol=0.0001, max_iter=50):
+def metodo_newton(x_sym, expr, f, x0, tol=0.001, max_iter=50):
     try:
         df_expr = sp.diff(expr, x_sym)
         df = sp.lambdify(x_sym, df_expr, modules=['numpy', 'math'])
@@ -138,7 +139,7 @@ def metodo_newton(x_sym, expr, f, x0, tol=0.0001, max_iter=50):
     return historial, None
 
 # 4. SECANTE
-def metodo_secante(f, x0, x1, tol=0.0001, max_iter=50):
+def metodo_secante(f, x0, x1, tol=0.001, max_iter=50):
     historial = []
     x0_c, x1_c = float(x0), float(x1)
 
@@ -184,7 +185,7 @@ def buscar_intervalos_sugeridos(func_str, rango_min=-10, rango_max=10, paso=0.5)
     return intervalos
 
 # CALCULADOR PRINCIPAL
-def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.0001):
+def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.001):
     try:
         x_sym, expr, f = preparar_funcion(func_str)
     except Exception as e:

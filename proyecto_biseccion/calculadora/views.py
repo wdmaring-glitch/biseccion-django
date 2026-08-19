@@ -29,7 +29,8 @@ def index(request):
             func = request.POST.get('funcion', '').strip()
             a = float(request.POST.get('a'))
             b = float(request.POST.get('b'))
-            tol = float(request.POST.get('tolerancia', 0.0001))
+            # Se ajustó el valor por defecto a 0.001 (10^-3)
+            tol = float(request.POST.get('tolerancia', 0.001))
             metodo = request.POST.get('metodo', 'biseccion')
 
             historial, grafica_data, mensaje, comparativa = calcular_raiz(func, a, b, metodo, tol)
