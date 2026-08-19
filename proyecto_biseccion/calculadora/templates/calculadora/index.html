@@ -279,11 +279,26 @@
         function actualizarPreviewLaTeX() {
             const rawFunc = document.getElementById('funcion').value;
             const previewEl = document.getElementById('mathPreview');
-            if(!rawFunc.trim()) return;
+            if(!rawFunc.trim()) {
+                previewEl.innerHTML = '<span class="text-muted small">Vista previa de f(x)</span>';
+                return;
+            }
             try {
-                let formatted = rawFunc.replace(/\*\*/g, '^').replace(/\*/g, ' ');
+                let formatted = rawFunc
+                    .replace(/\*\*/g, '^')
+                    .replace(/\*/g, ' ')
+                    .replace(/\bcos\b/g, '\\cos')
+                    .replace(/\bsin\b/g, '\\sin')
+                    .replace(/\btan\b/g, '\\tan')
+                    .replace(/\bln\b/g, '\\ln')
+                    .replace(/\blog\b/g, '\\log')
+                    .replace(/\bexp\b/g, '\\exp')
+                    .replace(/\bsqrt\b/g, '\\sqrt');
+
                 katex.render("f(x) = " + formatted, previewEl, { throwOnError: false });
-            } catch(e) { previewEl.innerText = rawFunc; }
+            } catch(e) { 
+                previewEl.innerText = rawFunc; 
+            }
         }
 
         async function obtenerIntervalosSugeridos() {

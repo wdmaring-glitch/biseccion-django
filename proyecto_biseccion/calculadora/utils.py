@@ -3,26 +3,37 @@ import numpy as np
 from sympy.parsing.sympy_parser import parse_expr, standard_transformations, implicit_multiplication_application, convert_xor
 
 def preparar_funcion(func_str):
-    """Convierte la cadena ingresada en función ejecutable, permitiendo multiplicación implícita (ej: 2x -> 2*x)."""
+    """Soporta e, ln, pi, multiplicacion implicita (2x) y potencias (^)."""
     x = sp.Symbol('x')
     transformations = standard_transformations + (implicit_multiplication_application, convert_xor)
-    expr = parse_expr(func_str, transformations=transformations)
+    
+    # Diccionario local para constantes y funciones comunes
+    local_dict = {
+        'e': sp.E,
+        'E': sp.E,
+        'ln': sp.log,
+        'log': sp.log,
+        'pi': sp.pi,
+        'exp': sp.exp
+    }
+    
+    expr = parse_expr(func_str, transformations=transformations, local_dict=local_dict)
     f = sp.lambdify(x, expr, modules=['numpy', 'math'])
     return x, expr, f
 
 def evaluar_safe(f, val):
-    """Evalúa la función evitando errores numéricos."""
+    """Evalúa f(val) de forma segura capturando indeterminaciones complejas o de dominio."""
     try:
         res = float(f(val))
         return res if np.isfinite(res) else None
     except Exception:
         return None
 
-# 1. MÉTODO DE BISECCIÓN
+# 1. BISECCIÓN
 def metodo_biseccion(f, a, b, tol=0.0001, max_iter=50):
     fa, fb = evaluar_safe(f, a), evaluar_safe(f, b)
     if fa is None or fb is None or fa * fb >= 0:
-        return None, "No se cumple el Teorema de Bolzano en el intervalo [a, b]."
+        return None, "No se cumple el Teorema de Bolzano en [a, b] (f(a)*f(b) >= 0)."
 
     historial = []
     a_c, b_c, fa_c = float(a), float(b), fa
@@ -31,6 +42,9 @@ def metodo_biseccion(f, a, b, tol=0.0001, max_iter=50):
     for i in range(1, max_iter + 1):
         c = (a_c + b_c) / 2.0
         fc = evaluar_safe(f, c)
+        if fc is None:
+            return None, f"Indeterminación al evaluar la función en x = {c}."
+
         error_abs = abs(b_c - a_c) / 2.0
         error_rel = (abs((c - c_prev) / c) * 100) if (c_prev is not None and c != 0) else 100.0
         c_prev = c
@@ -51,19 +65,26 @@ def metodo_biseccion(f, a, b, tol=0.0001, max_iter=50):
 
     return historial, None
 
-# 2. MÉTODO DE REGULA FALSI (FALSA POSICIÓN)
+# 2. REGULA FALSI
 def metodo_regula_falsi(f, a, b, tol=0.0001, max_iter=50):
     fa, fb = evaluar_safe(f, a), evaluar_safe(f, b)
     if fa is None or fb is None or fa * fb >= 0:
-        return None, "No se cumple el Teorema de Bolzano en el intervalo [a, b]."
+        return None, "No se cumple el Teorema de Bolzano en [a, b]."
 
     historial = []
     a_c, b_c, fa_c, fb_c = float(a), float(b), fa, fb
     c_prev = None
 
     for i in range(1, max_iter + 1):
-        c = (a_c * fb_c - b_c * fa_c) / (fb_c - fa_c)
+        denominador = fb_c - fa_c
+        if denominador == 0:
+            return None, "División por cero detectada en el denominador de Regula Falsi."
+
+        c = (a_c * fb_c - b_c * fa_c) / denominador
         fc = evaluar_safe(f, c)
+        if fc is None:
+            return None, f"Indeterminación al evaluar en x = {c}."
+
         error_abs = abs(c - c_prev) if c_prev is not None else abs(b_c - a_c)
         error_rel = (abs((c - c_prev) / c) * 100) if (c_prev is not None and c != 0) else 100.0
         c_prev = c
@@ -83,10 +104,13 @@ def metodo_regula_falsi(f, a, b, tol=0.0001, max_iter=50):
 
     return historial, None
 
-# 3. MÉTODO DE NEWTON-RAPHSON
+# 3. NEWTON-RAPHSON
 def metodo_newton(x_sym, expr, f, x0, tol=0.0001, max_iter=50):
-    df_expr = sp.diff(expr, x_sym)
-    df = sp.lambdify(x_sym, df_expr, modules=['numpy', 'math'])
+    try:
+        df_expr = sp.diff(expr, x_sym)
+        df = sp.lambdify(x_sym, df_expr, modules=['numpy', 'math'])
+    except Exception as e:
+        return None, f"No se pudo derivar la función: {str(e)}"
 
     historial = []
     x_curr = float(x0)
@@ -95,8 +119,8 @@ def metodo_newton(x_sym, expr, f, x0, tol=0.0001, max_iter=50):
         fx = evaluar_safe(f, x_curr)
         dfx = evaluar_safe(df, x_curr)
 
-        if dfx == 0 or dfx is None:
-            return None, "La derivada es cero o no se puede evaluar. Newton-Raphson no puede continuar."
+        if fx is None or dfx is None or dfx == 0:
+            return None, "Derivada igual a cero o fuera de dominio en Newton-Raphson."
 
         x_next = x_curr - (fx / dfx)
         error_abs = abs(x_next - x_curr)
@@ -113,7 +137,7 @@ def metodo_newton(x_sym, expr, f, x0, tol=0.0001, max_iter=50):
 
     return historial, None
 
-# 4. MÉTODO DE LA SECANTE
+# 4. SECANTE
 def metodo_secante(f, x0, x1, tol=0.0001, max_iter=50):
     historial = []
     x0_c, x1_c = float(x0), float(x1)
@@ -122,8 +146,8 @@ def metodo_secante(f, x0, x1, tol=0.0001, max_iter=50):
         f0 = evaluar_safe(f, x0_c)
         f1 = evaluar_safe(f, x1_c)
 
-        if f1 - f0 == 0:
-            return None, "División por cero en la fórmula de la Secante."
+        if f0 is None or f1 is None or (f1 - f0) == 0:
+            return None, "División por cero o punto fuera de dominio en el Método de la Secante."
 
         x_next = x1_c - f1 * (x1_c - x0_c) / (f1 - f0)
         error_abs = abs(x_next - x1_c)
@@ -142,7 +166,6 @@ def metodo_secante(f, x0, x1, tol=0.0001, max_iter=50):
 
 # BUSCADOR AUTOMÁTICO DE INTERVALOS
 def buscar_intervalos_sugeridos(func_str, rango_min=-10, rango_max=10, paso=0.5):
-    """Escanea f(x) en un rango e identifica pares [a, b] donde f(a) * f(b) < 0."""
     try:
         _, _, f = preparar_funcion(func_str)
     except Exception:
@@ -160,7 +183,7 @@ def buscar_intervalos_sugeridos(func_str, rango_min=-10, rango_max=10, paso=0.5)
                 break
     return intervalos
 
-# CALCULADOR PRINCIPAL Y GENERADOR DE GRÁFICAS
+# CALCULADOR PRINCIPAL
 def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.0001):
     try:
         x_sym, expr, f = preparar_funcion(func_str)
@@ -168,7 +191,7 @@ def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.0001):
         return None, None, f"Error al interpretar la expresión: {str(e)}", None
 
     historial, error = None, None
-    x0 = (a + b) / 2.0  # Para Newton
+    x0 = (a + b) / 2.0
 
     if metodo == 'biseccion':
         historial, error = metodo_biseccion(f, a, b, tol)
@@ -196,21 +219,30 @@ def calcular_raiz(func_str, a, b, metodo='biseccion', tol=0.0001):
         'errors_y': [h['error_abs'] for h in historial]
     }
 
+    # COMPARATIVA RESISTENTE A ERRORES
     comparativa = []
-    m_list = [
-        ('Bisección', metodo_biseccion(f, a, b, tol)[0]),
-        ('Regula Falsi', metodo_regula_falsi(f, a, b, tol)[0]),
-        ('Newton-Raphson', metodo_newton(x_sym, expr, f, x0, tol)[0]),
-        ('Secante', metodo_secante(f, a, b, tol)[0])
-    ]
+    
+    def intentar_metodo(nombre, funcion_metodo, *args):
+        try:
+            res, err = funcion_metodo(*args)
+            if res:
+                return {
+                    'nombre': nombre,
+                    'iters': len(res),
+                    'raiz': res[-1]['c'],
+                    'error_abs': res[-1]['error_abs']
+                }
+        except Exception:
+            pass
+        return None
 
-    for name, hist in m_list:
-        if hist:
-            comparativa.append({
-                'nombre': name,
-                'iters': len(hist),
-                'raiz': hist[-1]['c'],
-                'error_abs': hist[-1]['error_abs']
-            })
+    m1 = intentar_metodo('Bisección', metodo_biseccion, f, a, b, tol)
+    m2 = intentar_metodo('Regula Falsi', metodo_regula_falsi, f, a, b, tol)
+    m3 = intentar_metodo('Newton-Raphson', metodo_newton, x_sym, expr, f, x0, tol)
+    m4 = intentar_metodo('Secante', metodo_secante, f, a, b, tol)
+
+    for m in [m1, m2, m3, m4]:
+        if m:
+            comparativa.append(m)
 
     return historial, grafica_data, "Cálculo realizado con éxito.", comparativa
